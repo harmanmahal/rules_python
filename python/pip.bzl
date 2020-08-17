@@ -22,11 +22,16 @@ def _pip_import_impl(repository_ctx):
     # requirements.bzl without it.
     repository_ctx.file("BUILD", "")
 
+    interpreter_path = repository_ctx.attr.python_interpreter
+    if repository_ctx.attr.python_interpreter_target != None:
+        target = repository_ctx.attr.python_interpreter_target
+        interpreter_path = repository_ctx.path(target)
+
     args = [
-        repository_ctx.attr.python_interpreter,
+        interpreter_path,
         repository_ctx.path(repository_ctx.attr._script),
         "--python_interpreter",
-        repository_ctx.attr.python_interpreter,
+        interpreter_path,
         "--name",
         repository_ctx.attr.name,
         "--input",
@@ -43,7 +48,7 @@ def _pip_import_impl(repository_ctx):
         ]
 
     # To see the output, pass: quiet=False
-    result = repository_ctx.execute(args)
+    result = repository_ctx.execute(args, timeout=repository_ctx.attr.timeout)
 
     if result.return_code:
         fail("pip_import failed: %s (%s)" % (result.stdout, result.stderr))
@@ -57,10 +62,20 @@ pip_import = repository_rule(
 The command to run the Python interpreter used to invoke pip and unpack the
 wheels.
 """),
+        "python_interpreter_target": attr.label(allow_single_file = True, doc = """
+If you are using a custom python interpreter built by another repository rule,
+use this attribute to specify its BUILD target. This allows pip_import to invoke
+pip using the same interpreter as your toolchain. If set, takes precedence over
+python_interpreter.
+"""),
         "requirements": attr.label(
             mandatory = True,
             allow_single_file = True,
             doc = "The label of the requirements.txt file.",
+        ),
+        "timeout": attr.int(
+            default = 600,
+            doc = "Timeout (in seconds) for repository fetch."
         ),
         "_script": attr.label(
             executable = True,
